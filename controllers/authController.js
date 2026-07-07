@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
-import BlacklistToken from "../models/BlacklistToken.js";
+import BlacklistToken from "../models/BlackListToken.js";
 
 // Login
 export const Login = async (req, res) => {
