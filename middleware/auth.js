@@ -1,24 +1,25 @@
 import jwt from "jsonwebtoken";
+import BlacklistToken from '../models/BlackListToken.js'
 
 const auth = async (req, res, next) => {
-    const authHeader = req.headers.authorization || "";
-    const [scheme, tokenFromHeader] = authHeader.split(" ");
-
-    const tokenFromCookie = req.cookies?.access_token;
-
-    const token =
-        scheme === "Bearer" && tokenFromHeader
-            ? tokenFromHeader
-            : tokenFromCookie;
-
-    if (!token) {
-        return res.status(401).json({
-            success: false,
-            message: "Authentication token missing",
-        });
-    }
-
     try {
+        const authHeader = req.headers.authorization;
+
+        if (!authHeader) {
+            return res.status(401).json({
+                success: false,
+                message: "Authorization header missing",
+            });
+        }
+
+        if (!authHeader.startsWith("Bearer ")) {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid authorization format",
+            });
+        }
+
+        const token = authHeader.split(" ")[1];
         const blacklisted = await BlacklistToken.findOne({
             token,
         });
@@ -26,11 +27,22 @@ const auth = async (req, res, next) => {
         if (blacklisted) {
             return res.status(401).json({
                 success: false,
-                message: "Token revoked. Please login again.",
+                message: "Token has been revoked. Please login again.",
             });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                message: "Access token missing",
+            });
+        }
+
+
+        const decoded = jwt.verify(
+            token,
+            process.env.JWT_SECRET
+        );
 
         req.user = {
             id: decoded.id,
@@ -38,17 +50,27 @@ const auth = async (req, res, next) => {
         };
 
         next();
-    } catch (err) {
-        if (err.name === "TokenExpiredError") {
+
+    } catch (error) {
+        console.error(error);
+
+        if (error.name === "TokenExpiredError") {
             return res.status(401).json({
                 success: false,
                 message: "Access token expired",
             });
         }
 
-        return res.status(401).json({
+        if (error.name === "JsonWebTokenError") {
+            return res.status(401).json({
+                success: false,
+                message: "Invalid access token",
+            });
+        }
+
+        return res.status(500).json({
             success: false,
-            message: "Invalid token",
+            message: "Authentication failed",
         });
     }
 };
